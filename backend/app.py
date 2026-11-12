@@ -1,290 +1,134 @@
-import sqlite3
-from flask import Flask, jsonify, request
+from flask import Flask, request, jsonify
+from models import db, Dono, Pet
 
 app = Flask(__name__)
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///petshop.db"
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-BANCO = "petshop.db"
-
-
-def conectar():
-    return sqlite3.connect(BANCO)
+db.init_app(app)
 
 
-# ---------------------------------------------------------------
-# ROTAS DE DONOS - CODIGO DE REFERENCIA
-# ---------------------------------------------------------------
-
-
-@app.route("/donos", methods=["GET"])
-def listar_donos():
-    conexao = conectar()
-    cursor = conexao.cursor()
-    cursor.execute("SELECT id, nome, telefone FROM donos")
-    linhas = cursor.fetchall()
-    conexao.close()
-
-    donos = []
-    for linha in linhas:
-        donos.append({
-            "id": linha[0],
-            "nome": linha[1],
-            "telefone": linha[2]
-        })
-
-    return jsonify(donos)
-
-
-@app.route("/donos/<int:dono_id>", methods=["GET"])
-def buscar_dono(dono_id):
-    conexao = conectar()
-    cursor = conexao.cursor()
-    cursor.execute(
-        "SELECT id, nome, telefone FROM donos WHERE id = ?",
-        (dono_id,)
-    )
-    linha = cursor.fetchone()
-    conexao.close()
-
-    if linha is None:
-        return jsonify({"erro": "Dono nao encontrado"}), 404
-
-    dono = {
-        "id": linha[0],
-        "nome": linha[1],
-        "telefone": linha[2]
-    }
-
-    return jsonify(dono)
-
-
-@app.route("/donos", methods=["POST"])
-def criar_dono():
-    dados = request.json
-
-    if not dados or "nome" not in dados or "telefone" not in dados:
-        return jsonify({"erro": "Informe nome e telefone"}), 400
-
-    conexao = conectar()
-    cursor = conexao.cursor()
-    cursor.execute(
-        "INSERT INTO donos (nome, telefone) VALUES (?, ?)",
-        (dados["nome"], dados["telefone"])
-    )
-    conexao.commit()
-    novo_id = cursor.lastrowid
-    conexao.close()
-
-    dono = {
-        "id": novo_id,
-        "nome": dados["nome"],
-        "telefone": dados["telefone"]
-    }
-
-    return jsonify(dono), 201
-
-
-@app.route("/donos/<int:dono_id>", methods=["PUT"])
-def atualizar_dono(dono_id):
-    dados = request.json
-
-    if not dados or "nome" not in dados or "telefone" not in dados:
-        return jsonify({"erro": "Informe nome e telefone"}), 400
-
-    conexao = conectar()
-    cursor = conexao.cursor()
-    cursor.execute(
-        "UPDATE donos SET nome = ?, telefone = ? WHERE id = ?",
-        (dados["nome"], dados["telefone"], dono_id)
-    )
-    conexao.commit()
-    alterados = cursor.rowcount
-    conexao.close()
-
-    if alterados == 0:
-        return jsonify({"erro": "Dono nao encontrado"}), 404
-
-    dono = {
-        "id": dono_id,
-        "nome": dados["nome"],
-        "telefone": dados["telefone"]
-    }
-
-    return jsonify(dono)
-
-
-@app.route("/donos/<int:dono_id>", methods=["DELETE"])
-def remover_dono(dono_id):
-    conexao = conectar()
-    cursor = conexao.cursor()
-    cursor.execute("DELETE FROM donos WHERE id = ?", (dono_id,))
-    conexao.commit()
-    removidos = cursor.rowcount
-    conexao.close()
-
-    if removidos == 0:
-        return jsonify({"erro": "Dono nao encontrado"}), 404
-
-    return jsonify({"mensagem": "Dono removido com sucesso"})
-
-
-# ---------------------------------------------------------------
-# ROTAS DE PETS
-# ---------------------------------------------------------------
-
-
+# 1. GET /pets (lista todos ou filtra por ?dono_id=1)
 @app.route("/pets", methods=["GET"])
 def listar_pets():
     dono_id = request.args.get("dono_id")
-    conexao = conectar()
-    cursor = conexao.cursor()
 
-    if dono_id:
-        cursor.execute(
-            """
-            SELECT pets.id, pets.nome, pets.especie, pets.dono_id, donos.nome
-            FROM pets
-            JOIN donos ON pets.dono_id = donos.id
-            WHERE pets.dono_id = ?
-            """,
-            (dono_id,)
-        )
+    if dono_id is not None:
+        try:
+            dono_id_int = int(dono_id)
+        except ValueError:
+            return jsonify({"erro": "O parâmetro dono_id deve ser um inteiro"}), 400
+
+        pets = Pet.query.filter_by(dono_id=dono_id_int).all()
     else:
-        cursor.execute(
-            """
-            SELECT pets.id, pets.nome, pets.especie, pets.dono_id, donos.nome
-            FROM pets
-            JOIN donos ON pets.dono_id = donos.id
-            """
-        )
+        pets = Pet.query.all()
 
-    linhas = cursor.fetchall()
-    conexao.close()
-
-    pets = []
-    for linha in linhas:
-        pets.append({
-            "id": linha[0],
-            "nome": linha[1],
-            "especie": linha[2],
-            "dono_id": linha[3],
-            "dono_nome": linha[4]
-        })
-
-    return jsonify(pets)
+    return jsonify([pet.to_dict() for pet in pets]), 200
 
 
-@app.route("/pets/<int:pet_id>", methods=["GET"])
-def buscar_pet(pet_id):
-    conexao = conectar()
-    cursor = conexao.cursor()
-    cursor.execute(
-        """
-        SELECT pets.id, pets.nome, pets.especie, pets.dono_id, donos.nome
-        FROM pets
-        JOIN donos ON pets.dono_id = donos.id
-        WHERE pets.id = ?
-        """,
-        (pet_id,)
-    )
-    linha = cursor.fetchone()
-    conexao.close()
+# 2. GET /pets/<id>
+@app.route("/pets/<int:id>", methods=["GET"])
+def buscar_pet(id):
+    pet = db.session.get(Pet, id)
+    if not pet:
+        return jsonify({"erro": "Pet não encontrado"}), 404
 
-    if linha is None:
-        return jsonify({"erro": "Pet nao encontrado"}), 404
-
-    pet = {
-        "id": linha[0],
-        "nome": linha[1],
-        "especie": linha[2],
-        "dono_id": linha[3],
-        "dono_nome": linha[4]
-    }
-
-    return jsonify(pet)
+    return jsonify(pet.to_dict()), 200
 
 
+# 3. POST /pets
 @app.route("/pets", methods=["POST"])
 def criar_pet():
-    dados = request.json
+    dados = request.get_json(silent=True)
+    if not dados:
+        return jsonify({"erro": "Corpo da requisição deve ser JSON válido"}), 400
 
-    if not dados or "nome" not in dados or "especie" not in dados or "dono_id" not in dados:
-        return jsonify({"erro": "Informe nome, especie e dono_id"}), 400
+    nome = dados.get("nome")
+    especie = dados.get("especie")
+    idade = dados.get("idade")
+    dono_id = dados.get("dono_id")
 
-    conexao = conectar()
-    cursor = conexao.cursor()
+    if not nome or not str(nome).strip() or not especie or not str(especie).strip() or dono_id is None:
+        return jsonify({"erro": "Campos obrigatórios: nome, especie e dono_id"}), 400
 
-    cursor.execute("SELECT id FROM donos WHERE id = ?", (dados["dono_id"],))
-    if not cursor.fetchone():
-        conexao.close()
-        return jsonify({"erro": "Dono nao encontrado"}), 404
+    try:
+        dono_id = int(dono_id)
+        if idade is not None:
+            idade = int(idade)
+    except (ValueError, TypeError):
+        return jsonify({"erro": "dono_id e idade devem ser números inteiros"}), 400
 
-    cursor.execute(
-        "INSERT INTO pets (nome, especie, dono_id) VALUES (?, ?, ?)",
-        (dados["nome"], dados["especie"], dados["dono_id"])
+    dono = db.session.get(Dono, dono_id)
+    if not dono:
+        return jsonify({"erro": "Dono não encontrado"}), 404
+
+    novo_pet = Pet(
+        nome=str(nome).strip(),
+        especie=str(especie).strip(),
+        idade=idade,
+        dono_id=dono_id,
     )
-    conexao.commit()
-    novo_id = cursor.lastrowid
-    conexao.close()
+    db.session.add(novo_pet)
+    db.session.commit()
 
-    pet = {
-        "id": novo_id,
-        "nome": dados["nome"],
-        "especie": dados["especie"],
-        "dono_id": dados["dono_id"]
-    }
-
-    return jsonify(pet), 201
+    return jsonify(novo_pet.to_dict()), 201
 
 
-@app.route("/pets/<int:pet_id>", methods=["PUT"])
-def atualizar_pet(pet_id):
-    dados = request.json
+# 4. PUT /pets/<id>
+@app.route("/pets/<int:id>", methods=["PUT"])
+def atualizar_pet(id):
+    pet = db.session.get(Pet, id)
+    if not pet:
+        return jsonify({"erro": "Pet não encontrado"}), 404
 
-    if not dados or "nome" not in dados or "especie" not in dados or "dono_id" not in dados:
-        return jsonify({"erro": "Informe nome, especie e dono_id"}), 400
+    dados = request.get_json(silent=True)
+    if not dados:
+        return jsonify({"erro": "Corpo da requisição deve ser JSON válido"}), 400
 
-    conexao = conectar()
-    cursor = conexao.cursor()
+    if "nome" in dados:
+        if not dados["nome"] or not str(dados["nome"]).strip():
+            return jsonify({"erro": "O campo nome não pode ser vazio"}), 400
+        pet.nome = str(dados["nome"]).strip()
 
-    cursor.execute("SELECT id FROM donos WHERE id = ?", (dados["dono_id"],))
-    if not cursor.fetchone():
-        conexao.close()
-        return jsonify({"erro": "Dono nao encontrado"}), 404
+    if "especie" in dados:
+        if not dados["especie"] or not str(dados["especie"]).strip():
+            return jsonify({"erro": "O campo especie não pode ser vazio"}), 400
+        pet.especie = str(dados["especie"]).strip()
 
-    cursor.execute(
-        "UPDATE pets SET nome = ?, especie = ?, dono_id = ? WHERE id = ?",
-        (dados["nome"], dados["especie"], dados["dono_id"], pet_id)
-    )
-    conexao.commit()
-    alterados = cursor.rowcount
-    conexao.close()
+    if "idade" in dados:
+        if dados["idade"] is not None:
+            try:
+                pet.idade = int(dados["idade"])
+            except (ValueError, TypeError):
+                return jsonify({"erro": "idade deve ser um número inteiro"}), 400
+        else:
+            pet.idade = None
 
-    if alterados == 0:
-        return jsonify({"erro": "Pet nao encontrado"}), 404
+    if "dono_id" in dados:
+        try:
+            novo_dono_id = int(dados["dono_id"])
+        except (ValueError, TypeError):
+            return jsonify({"erro": "dono_id deve ser um número inteiro"}), 400
 
-    pet = {
-        "id": pet_id,
-        "nome": dados["nome"],
-        "especie": dados["especie"],
-        "dono_id": dados["dono_id"]
-    }
+        dono = db.session.get(Dono, novo_dono_id)
+        if not dono:
+            return jsonify({"erro": "Dono não encontrado"}), 404
+        pet.dono_id = novo_dono_id
 
-    return jsonify(pet)
+    db.session.commit()
+    return jsonify(pet.to_dict()), 200
 
 
-@app.route("/pets/<int:pet_id>", methods=["DELETE"])
-def remover_pet(pet_id):
-    conexao = conectar()
-    cursor = conexao.cursor()
-    cursor.execute("DELETE FROM pets WHERE id = ?", (pet_id,))
-    conexao.commit()
-    removidos = cursor.rowcount
-    conexao.close()
+# 5. DELETE /pets/<id>
+@app.route("/pets/<int:id>", methods=["DELETE"])
+def deletar_pet(id):
+    pet = db.session.get(Pet, id)
+    if not pet:
+        return jsonify({"erro": "Pet não encontrado"}), 404
 
-    if removidos == 0:
-        return jsonify({"erro": "Pet nao encontrado"}), 404
-
-    return jsonify({"mensagem": "Pet removido com sucesso"})
+    db.session.delete(pet)
+    db.session.commit()
+    return jsonify({"mensagem": "Pet removido com sucesso"}), 200
 
 
 if __name__ == "__main__":
