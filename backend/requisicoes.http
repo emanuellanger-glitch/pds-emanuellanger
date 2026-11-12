@@ -1,50 +1,68 @@
-@baseUrl = http://127.0.0.1:5000
-
-### 1. Listar todos os pets (traz dono_nome)
-GET {{baseUrl}}/pets
-
-### 1b. Filtrar pets por dono_id
-GET {{baseUrl}}/pets?dono_id=1
-
-### 2. Buscar pet por ID
-GET {{baseUrl}}/pets/1
-
-### 2b. Buscar pet inexistente (deve retornar 404)
-GET {{baseUrl}}/pets/999
-
-### 3. Criar novo pet (deve retornar 201)
-POST {{baseUrl}}/pets
+### Teste 1: POST com idade em texto (deve retornar 400)
+POST http://127.0.0.1:5000/pets
 Content-Type: application/json
 
 {
-  "nome": "Bolinha",
+  "nome": "Rex",
   "especie": "Cachorro",
-  "idade": 1,
-  "dono_id": 2
+  "idade": "tres",
+  "dono_id": 1
 }
 
-### 3b. Criar pet com dados inválidos (deve retornar 400)
-POST {{baseUrl}}/pets
+### Teste 2: POST com idade negativa (deve retornar 400)
+POST http://127.0.0.1:5000/pets
 Content-Type: application/json
 
 {
-  "nome": ""
+  "nome": "Rex",
+  "especie": "Cachorro",
+  "idade": -2,
+  "dono_id": 1
 }
 
-### 4. Atualizar pet existente (deve retornar 200)
-PUT {{baseUrl}}/pets/1
+### Teste 3: POST com dono_id inexistente (deve retornar 400)
+POST http://127.0.0.1:5000/pets
 Content-Type: application/json
 
 {
-  "nome": "Rex Atualizado",
-  "idade": 4
+  "nome": "Rex",
+  "especie": "Cachorro",
+  "idade": 3,
+  "dono_id": 999
 }
 
-### 5. Deletar pet (deve retornar 200)
-DELETE {{baseUrl}}/pets/3
+### Teste 4: POST com nome vazio (deve retornar 400)
+POST http://127.0.0.1:5000/pets
+Content-Type: application/json
 
-### Listar pets de um dono existente (deve retornar 200)
-GET http://127.0.0.1:5000/donos/1/pets
+{
+  "nome": "   ",
+  "especie": "Cachorro",
+  "idade": 3,
+  "dono_id": 1
+}
 
-### Listar pets de um dono inexistente (deve retornar 404)
-GET http://127.0.0.1:5000/donos/999/pets    
+### Teste 5: POST com múltiplos erros simultâneos (deve retornar 400 com lista de 4 erros)
+POST http://127.0.0.1:5000/pets
+Content-Type: application/json
+
+{
+  "nome": "",
+  "especie": "",
+  "idade": -1,
+  "dono_id": 999
+}
+
+### Teste 6: POST válido (deve retornar 201)
+POST http://127.0.0.1:5000/pets
+Content-Type: application/json
+
+{
+  "nome": "Pipoca",
+  "especie": "Cachorro",
+  "idade": 0,
+  "dono_id": 1
+}
+
+### Conferência: Listar pets para confirmar que apenas os válidos existem no banco
+GET http://127.0.0.1:5000/pets
