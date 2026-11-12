@@ -8,7 +8,18 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db.init_app(app)
 
 
-# 1. GET /pets (lista todos ou filtra por ?dono_id=1)
+# Nova rota da Aula 03: listar pets de um dono específico usando dono.pets
+@app.route("/donos/<int:id>/pets", methods=["GET"])
+def listar_pets_do_dono(id):
+    dono = db.session.get(Dono, id)
+    if not dono:
+        return jsonify({"erro": "Dono não encontrado"}), 404
+
+    return jsonify([pet.to_dict() for pet in dono.pets]), 200
+
+
+# --- Rotas da Aula 02 preservadas ---
+
 @app.route("/pets", methods=["GET"])
 def listar_pets():
     dono_id = request.args.get("dono_id")
@@ -26,7 +37,6 @@ def listar_pets():
     return jsonify([pet.to_dict() for pet in pets]), 200
 
 
-# 2. GET /pets/<id>
 @app.route("/pets/<int:id>", methods=["GET"])
 def buscar_pet(id):
     pet = db.session.get(Pet, id)
@@ -36,7 +46,6 @@ def buscar_pet(id):
     return jsonify(pet.to_dict()), 200
 
 
-# 3. POST /pets
 @app.route("/pets", methods=["POST"])
 def criar_pet():
     dados = request.get_json(silent=True)
@@ -48,15 +57,21 @@ def criar_pet():
     idade = dados.get("idade")
     dono_id = dados.get("dono_id")
 
-    if not nome or not str(nome).strip() or not especie or not str(especie).strip() or dono_id is None:
-        return jsonify({"erro": "Campos obrigatórios: nome, especie e dono_id"}), 400
+    if (
+        not nome
+        or not str(nome).strip()
+        or not especie
+        or not str(especie).strip()
+        or idade is None
+        or dono_id is None
+    ):
+        return jsonify({"erro": "Campos obrigatórios: nome, especie, idade e dono_id"}), 400
 
     try:
+        idade = int(idade)
         dono_id = int(dono_id)
-        if idade is not None:
-            idade = int(idade)
     except (ValueError, TypeError):
-        return jsonify({"erro": "dono_id e idade devem ser números inteiros"}), 400
+        return jsonify({"erro": "idade e dono_id devem ser números inteiros"}), 400
 
     dono = db.session.get(Dono, dono_id)
     if not dono:
@@ -74,7 +89,6 @@ def criar_pet():
     return jsonify(novo_pet.to_dict()), 201
 
 
-# 4. PUT /pets/<id>
 @app.route("/pets/<int:id>", methods=["PUT"])
 def atualizar_pet(id):
     pet = db.session.get(Pet, id)
@@ -96,13 +110,12 @@ def atualizar_pet(id):
         pet.especie = str(dados["especie"]).strip()
 
     if "idade" in dados:
-        if dados["idade"] is not None:
-            try:
-                pet.idade = int(dados["idade"])
-            except (ValueError, TypeError):
-                return jsonify({"erro": "idade deve ser um número inteiro"}), 400
-        else:
-            pet.idade = None
+        if dados["idade"] is None:
+            return jsonify({"erro": "O campo idade não pode ser nulo"}), 400
+        try:
+            pet.idade = int(dados["idade"])
+        except (ValueError, TypeError):
+            return jsonify({"erro": "idade deve ser um número inteiro"}), 400
 
     if "dono_id" in dados:
         try:
@@ -119,7 +132,6 @@ def atualizar_pet(id):
     return jsonify(pet.to_dict()), 200
 
 
-# 5. DELETE /pets/<id>
 @app.route("/pets/<int:id>", methods=["DELETE"])
 def deletar_pet(id):
     pet = db.session.get(Pet, id)

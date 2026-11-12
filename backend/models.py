@@ -8,10 +8,9 @@ class Dono(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(100), nullable=False)
-    telefone = db.Column(db.String(20), nullable=True)
+    telefone = db.Column(db.String(20), nullable=False)
 
-    # Relacionamento ORM: permite acessar pet.dono sem JOIN manual
-    pets = db.relationship("Pet", backref="dono", lazy=True)
+    pets = db.relationship("Pet", backref="dono")
 
     def to_dict(self):
         return {
@@ -26,8 +25,8 @@ class Pet(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(100), nullable=False)
-    especie = db.Column(db.String(50), nullable=False)
-    idade = db.Column(db.Integer, nullable=True)
+    especie = db.Column(db.String(100), nullable=False)
+    idade = db.Column(db.Integer, nullable=False)
     dono_id = db.Column(db.Integer, db.ForeignKey("donos.id"), nullable=False)
 
     def to_dict(self):
@@ -37,5 +36,5 @@ class Pet(db.Model):
             "especie": self.especie,
             "idade": self.idade,
             "dono_id": self.dono_id,
-            "dono_nome": self.dono.nome if self.dono else None,
+            "dono_nome": self.dono.nome,
         }

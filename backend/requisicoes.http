@@ -42,3 +42,9 @@ Content-Type: application/json
 
 ### 5. Deletar pet (deve retornar 200)
 DELETE {{baseUrl}}/pets/3
+
+### Listar pets de um dono existente (deve retornar 200)
+GET http://127.0.0.1:5000/donos/1/pets
+
+### Listar pets de um dono inexistente (deve retornar 404)
+GET http://127.0.0.1:5000/donos/999/pets    
